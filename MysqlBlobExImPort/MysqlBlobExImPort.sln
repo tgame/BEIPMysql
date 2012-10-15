@@ -1,0 +1,29 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 11.00
+# Visual Studio 2010
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "MysqlBlobExImPort", "MysqlBlobExImPort.vcxproj", "{47D185A9-47DC-426B-9891-764FE4E6CD43}"
+	ProjectSection(ProjectDependencies) = postProject
+		{2DAE6437-6594-5B8A-B969-BBF287043EE4} = {2DAE6437-6594-5B8A-B969-BBF287043EE4}
+	EndProjectSection
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "mysqlpp", "..\mysqlpp\mysqlpp.vcxproj", "{2DAE6437-6594-5B8A-B969-BBF287043EE4}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Win32 = Debug|Win32
+		Release|Win32 = Release|Win32
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{47D185A9-47DC-426B-9891-764FE4E6CD43}.Debug|Win32.ActiveCfg = Debug|Win32
+		{47D185A9-47DC-426B-9891-764FE4E6CD43}.Debug|Win32.Build.0 = Debug|Win32
+		{47D185A9-47DC-426B-9891-764FE4E6CD43}.Release|Win32.ActiveCfg = Release|Win32
+		{47D185A9-47DC-426B-9891-764FE4E6CD43}.Release|Win32.Build.0 = Release|Win32
+		{2DAE6437-6594-5B8A-B969-BBF287043EE4}.Debug|Win32.ActiveCfg = Debug|Win32
+		{2DAE6437-6594-5B8A-B969-BBF287043EE4}.Debug|Win32.Build.0 = Debug|Win32
+		{2DAE6437-6594-5B8A-B969-BBF287043EE4}.Release|Win32.ActiveCfg = Release|Win32
+		{2DAE6437-6594-5B8A-B969-BBF287043EE4}.Release|Win32.Build.0 = Release|Win32
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal
