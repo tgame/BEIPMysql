@@ -69,6 +69,42 @@ struct DataInfo
 			}
 		}
 	}
+	string BuildUpdateSql(DataSingleRow& row)
+	{
+		string rtn;
+		size_t col = row.size();
+		for(size_t i=0;i<col;++i)
+		{
+			rtn += m_rowInfo[i].m_name;
+			rtn += "=";
+			if(row[i].empty())
+			{
+				rtn += "NULL";
+				if(i!=col-1)
+					rtn += ",";
+
+				continue;
+			}
+			if(m_rowInfo[i].m_needEscape)
+			{
+				rtn += "x'";
+				unsigned long len = row[i].length();
+				char *hexStr = (char*)malloc(len*2+1);
+				mysql_hex_string(hexStr,row[i].c_str(),len);
+				rtn +=  hexStr;
+				rtn += "'";
+				free(hexStr);
+			}
+			else
+				rtn += row[i];		
+
+			if(i!=col-1)
+				rtn += ",";
+		}
+
+		//rtn += ");";
+		return rtn;
+	}
 };
 string BuildValueSql(DataSingleRow& row,const vector<DataFieldInfo>& escapeField);
 
@@ -120,7 +156,9 @@ void Export(const string& sql,const string& filename)
 		DataSingleRow myrow;
 		for(size_t i=0;i<row.size();++i)
 		{
-			vvalue=row[i];
+			const mysqlpp::String& fieldValue = row[i];
+			
+			vvalue.assign(fieldValue.c_str(),fieldValue.size());
 			myrow.m_fields.push_back(vvalue);
 		}
 		data.m_rows.push_back(myrow);
@@ -149,7 +187,7 @@ void Import(const string& sql,const string& filename,const string& id,const stri
 		unsigned int l = ftell(fp);
 		char* buf = new char[l];
 		fseek(fp,0,SEEK_SET);
-		fread(buf,stream.Size(),1,fp);
+		fread(buf,l,1,fp);
 		stream.Assign(buf,l);
 		fclose(fp);
 		stream.Read(data);
@@ -161,6 +199,15 @@ void Import(const string& sql,const string& filename,const string& id,const stri
 		getchar();
 		return;
 	}
+	string filedList;
+	data.AppendFieldString(filedList);
+	printf("file read row:%d\r\n",data.m_rows.size());
+	printf("file filed:%s\r\n",filedList.c_str());
+	if (!data.m_rows.empty())
+	{
+		string s = data.BuildUpdateSql(data.m_rows.front());
+		printf("Test Sql:%s\r\n",s.c_str());
+	}
 	
 	AutoReleaseConnection acon(gs_conn);
 	mysqlpp::Connection* con = acon._connection;
@@ -170,18 +217,23 @@ void Import(const string& sql,const string& filename,const string& id,const stri
 		getchar();
 		return;
 	}
-	string filedList;
-	data.AppendFieldString(filedList);
 	string values;
+	string pre_sql;
 	for (unsigned int i=0;i<data.m_rows.size();i++)
 	{
 		DataSingleRow& dataRow=data.m_rows[i];
 		mysqlpp::Query query = con->query();
-		query<<"update "<<table<<" set (";
+		/*query<<"update "<<table<<" set (";
 		query<<filedList<<") values(";
 		values=BuildValueSql(dataRow,data.m_rowInfo);
-		query<<values<<") where "<<sql<<";";
+		query<<values<<") where "<<sql<<";";*/
+		query<<"update "<<table<<" set ";
+		query<<data.BuildUpdateSql(dataRow);
+		query<<" where "<<sql<<";";
+		pre_sql=query.str();
+		printf("exec sql:%s\r\n",pre_sql.c_str());
 		mysqlpp::SimpleResult ret = query.execute();
+		size_t affect_row = ret.rows();
 		if (ret.rows() == 0)
 		{
 			printf("sql exec failed..is the where sql error:\r\n");
@@ -189,8 +241,15 @@ void Import(const string& sql,const string& filename,const string& id,const stri
 			getchar();
 			return;
 		}
+		else
+		{
+			printf("sql import filed:%s,affect row:%d\r\n",filedList.c_str(),affect_row);
+		}
 	}
 }
+
+void ClearSaleDB(void);
+
 
 string FetchArg(const char* ptr,const char endChar)
 {
@@ -217,6 +276,7 @@ int _tmain(int argc, _TCHAR* argv[])
 	string file;
 	string import_id_filed;
 	int isArgReaded=0;
+	bool isClearSaleDB=false;
 	for (int i=1;i<argc;i++)
 	{
 		if (argv[i][0] != '-')
@@ -274,8 +334,13 @@ int _tmain(int argc, _TCHAR* argv[])
 			sql_table=argv[i]+2;
 			isArgReaded++;
 		}
+		else if (argv[i][1]='c')
+		{
+			op='c';
+			isArgReaded++;
+		}
 	}
-	if (isArgReaded<7)
+	if (isArgReaded<4)
 	{
 		printf("arg missed.\r\n");
 		printf("usage: -hhost -uuser -ppwd -ddbname -bport\r\n");
@@ -299,8 +364,17 @@ int _tmain(int argc, _TCHAR* argv[])
 			printf("Begin import:update %s where %s\r\n",sql_table.c_str(),sql.c_str());
 			Import(sql,file,import_id_filed,sql_table);
 		}
+		else if ('c'==op)
+		{
+			ClearSaleDB();
+		}
 	}
-	catch (exception e)
+	catch (mysqlpp::Exception& e)
+	{
+		printf("\r\nerror :%s",e.what());
+		getchar();
+	}
+	catch(std::exception &e)
 	{
 		printf("\r\nerror :%s",e.what());
 		getchar();
@@ -345,4 +419,108 @@ string BuildValueSql(DataSingleRow& row,const vector<DataFieldInfo>& escapeField
 
 	//rtn += ");";
 	return rtn;
+}
+
+
+#include "mysqlpp/lib/ssqls.h"
+
+sql_create_5(
+	SaleDBInfo, 1, 5, 
+	mysqlpp::sql_int,fSaleID,
+	mysqlpp::sql_varchar,fSellerName,
+	mysqlpp::sql_int,fPrice,
+	mysqlpp::sql_int, fHours,
+	mysqlpp::sql_bigint,fItemGUID
+	);
+#define Call_Sql(c) {printf("Begin Sql:%s\r\n",query.str().c_str());}c;{printf("end sql");}
+
+
+typedef __int64 GUID_Item_Type;
+void SendMail(const std::string &playerName, const std::string &title ,GUID_Item_Type guid);
+
+void ClearSaleDB(void)
+{
+	AutoReleaseConnection dbCon(gs_conn);
+	if (NULL == dbCon._connection)
+	{
+		printf("mysql connect failed!");
+		return;
+	}
+	try
+	{
+		mysqlpp::Query query = dbCon._connection->query();
+		
+		std::vector<SaleDBInfo> temp;
+		query << "select * from tsaledb";
+		Call_Sql(query.storein(temp));
+		
+		query.reset();
+		query << "delete from tsaledb";
+		Call_Sql(mysqlpp::SimpleResult ret = query.execute());
+		printf("delete record:%d\r\n",ret.rows());
+
+		for (int index = 0; index < temp.size() ; ++index)
+		{
+			SendMail(temp[index].fSellerName, "寄售超时",temp[index].fItemGUID);
+		}
+	}
+	catch (mysqlpp::Exception& e)
+	{
+		e.what();
+	}
+	catch(std::exception &e)
+	{
+		e.what();
+	}
+}
+
+size_t SafeMemoryCopy(void* dest,size_t destLen,const void* src,size_t srcSize)
+{
+	size_t size=min(destLen,srcSize);
+	memcpy(dest,src,size);
+	return size;
+}
+
+#define PLAYER_NAME_LEN 20
+#define TITLE_LEN 40
+#define ATTACHMENT_DATA_LEN 400
+#define CONTENT_LEN 1000
+
+void SendMail(const std::string &playerName, const std::string &title ,GUID_Item_Type guid)
+{
+	std::string m_senderName("寄售服务器");
+	AutoReleaseConnection dbcon(gs_conn);
+	if(!dbcon._connection)	return;
+	mysqlpp::Query query = dbcon._connection->query();
+	int mailType=0;
+	query.reset();
+	query<<"insert into Mailbox values(Null,\'";
+	query<<m_senderName;
+	query<<"\',\'";
+	query<<playerName;
+	query<<"\',";
+	query<<0;
+	query<<",";
+	query<<static_cast<unsigned short>(mailType);
+	query<<",";
+	query<<0;
+	query<<",\'";
+	query<<title;
+	query<<"\',";
+	query<<guid;
+	query<<",now(),date_add(now(),interval ";
+	int timeoutTime=30;
+	query<<timeoutTime;
+	mysqlpp::String strContent;
+	strContent.assign(title.c_str(), title.size());
+	query<<" day),\'";
+	query<<strContent.c_str();
+	query<<"\');";
+
+	Call_Sql(mysqlpp::SimpleResult _res = query.execute());
+	if (_res.rows()==0)
+	{
+		printf("Send mail back failed:%s\r\n",query.str().c_str());
+		getchar();
+	}
 }
